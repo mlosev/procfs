@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	statuslineRE = regexp.MustCompile(`(\d+) blocks .*\[(\d+)/(\d+)\] \[[U_]+\]`)
+	statuslineRE = regexp.MustCompile(`(\d+) blocks .*(\[(\d+)/(\d+)\] \[[U_]+\]|chunks)`)
 	buildlineRE  = regexp.MustCompile(`\((\d+)/\d+\)`)
 )
 
@@ -114,7 +114,8 @@ func (fs FS) ParseMDStat() (mdstates []MDStat, err error) {
 
 func evalStatusline(statusline string) (active, total, size int64, err error) {
 	matches := statuslineRE.FindStringSubmatch(statusline)
-	if len(matches) != 4 {
+
+	if len(matches) != 5 {
 		return 0, 0, 0, fmt.Errorf("unexpected statusline: %s", statusline)
 	}
 
@@ -123,12 +124,17 @@ func evalStatusline(statusline string) (active, total, size int64, err error) {
 		return 0, 0, 0, fmt.Errorf("unexpected statusline %s: %s", statusline, err)
 	}
 
-	total, err = strconv.ParseInt(matches[2], 10, 64)
+	if matches[2] == "chunks" {
+		// most likely we deal with raid0 device, for which there is no number of total/active disks
+		return 0, 0, size, nil
+	}
+
+	total, err = strconv.ParseInt(matches[3], 10, 64)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("unexpected statusline %s: %s", statusline, err)
 	}
 
-	active, err = strconv.ParseInt(matches[3], 10, 64)
+	active, err = strconv.ParseInt(matches[4], 10, 64)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("unexpected statusline %s: %s", statusline, err)
 	}
